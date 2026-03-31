@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ModuleRisk — Defect Prediction System</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+</head>
+
+<body>
+    <div class="noise"></div>
+    <header>
+        <div class="logo">
+            <span class="logo-icon">⬡</span>
+            <span class="logo-text">ModuleRisk</span>
+            <span class="logo-tag">AI · Defect Prediction</span>
+        </div>
+        <nav>
+            <a href="#upload" class="nav-link active">Upload</a>
+            <a href="#dashboard" class="nav-link">Dashboard</a>
+            <a href="#history" class="nav-link">History</a>
+        </nav>
+    </header>
+    <main>
+        <section id="upload" class="section">
+            <div class="hero-text">
+                <h1>Predict <span class="accent-high">High-Risk</span><br>Software Modules</h1>
+                <p class="subtitle">Upload your CSV dataset. Our KMeans ML engine classifies every module into High /
+                    Medium / Low risk in seconds.</p>
+            </div>
+            <div class="upload-zone" id="dropzone">
+                <div class="upload-inner">
+                    <div class="upload-icon">📂</div>
+                    <p class="upload-label">Drop your CSV here</p>
+                    <p class="upload-sub">or click to browse files</p>
+                    <input type="file" id="fileInput" accept=".csv" hidden>
+                    <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">Choose
+                        File</button>
+                    <p class="file-hint" id="fileHint">No file selected</p>
+                </div>
+            </div>
+            <div class="upload-actions">
+                <button class="btn btn-analyze" id="analyzeBtn" disabled onclick="uploadFile()">
+                    <span class="btn-icon">🤖</span> Run Analysis
+                </button>
+            </div>
+            <div id="errorBox" class="error-box hidden"></div>
+            <div id="loadingBox" class="loading-box hidden">
+                <div class="spinner"></div>
+                <p>Running KMeans clustering…</p>
+            </div>
+        </section>
+        <section id="dashboard" class="section hidden">
+            <div class="section-header">
+                <h2>Analysis <span class="accent-glow">Results</span></h2>
+                <div class="download-group">
+                    <button class="btn btn-sm btn-outline" onclick="downloadFile('csv')">⬇ Results CSV</button>
+                    <button class="btn btn-sm btn-powerbi" onclick="downloadFile('powerbi')">📊 Power BI Export</button>
+                </div>
+            </div>
+            <div class="stats-grid">
+                <div class="stat-card stat-total">
+                    <div class="stat-icon">🗂</div>
+                    <div class="stat-value" id="statTotal">0</div>
+                    <div class="stat-label">Total Modules</div>
+                </div>
+                <div class="stat-card stat-high">
+                    <div class="stat-icon">🔴</div>
+                    <div class="stat-value" id="statHigh">0</div>
+                    <div class="stat-label">High Risk</div>
+                </div>
+                <div class="stat-card stat-medium">
+                    <div class="stat-icon">🟡</div>
+                    <div class="stat-value" id="statMedium">0</div>
+                    <div class="stat-label">Medium Risk</div>
+                </div>
+                <div class="stat-card stat-low">
+                    <div class="stat-icon">🟢</div>
+                    <div class="stat-value" id="statLow">0</div>
+                    <div class="stat-label">Low Risk</div>
+                </div>
+                <div class="stat-card stat-rate">
+                    <div class="stat-icon">✅</div>
+                    <div class="stat-value" id="statRate">0%</div>
+                    <div class="stat-label">Success Rate</div>
+                </div>
+            </div>
+            <div class="charts-row">
+                <div class="chart-card">
+                    <h3>Risk Distribution</h3>
+                    <canvas id="pieChart"></canvas>
+                </div>
+                <div class="chart-card">
+                    <h3>Module Count by Risk</h3>
+                    <canvas id="barChart"></canvas>
+                </div>
+            </div>
+            <div class="table-card">
+                <div class="table-header">
+                    <h3>Module Details</h3>
+                    <div class="filter-group">
+                        <button class="filter-btn active" onclick="filterTable('ALL')">All</button>
+                        <button class="filter-btn high" onclick="filterTable('HIGH')">High</button>
+                        <button class="filter-btn medium" onclick="filterTable('MEDIUM')">Medium</button>
+                        <button class="filter-btn low" onclick="filterTable('LOW')">Low</button>
+                    </div>
+                </div>
+                <div class="table-wrap">
+                    <table id="moduleTable">
+                        <thead id="tableHead"></thead>
+                        <tbody id="tableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+        <section id="history" class="section">
+            <div class="section-header">
+                <h2>Analysis <span class="accent-glow">History</span></h2>
+                <button class="btn btn-sm btn-outline" onclick="loadHistory()">↻ Refresh</button>
+            </div>
+            <div class="table-card">
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Filename</th>
+                                <th>Timestamp</th>
+                                <th>Total</th>
+                                <th>High</th>
+                                <th>Medium</th>
+                                <th>Low</th>
+                                <th>Success Rate</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historyBody">
+                            <tr>
+                                <td colspan="8" class="empty-row">No history yet. Run an analysis first.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </main>
+    <script src="/static/script.js"></script>
+</body>
+
+</html>
