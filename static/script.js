@@ -2,6 +2,7 @@ let allModules = [];
 let allFeatures = [];
 let pieChart = null;
 let barChart = null;
+let jiraData = null;
 const fileInput = document.getElementById('fileInput');
 const dropzone = document.getElementById('dropzone');
 const fileHint = document.getElementById('fileHint');
@@ -177,10 +178,183 @@ async function loadHistory() {
 async function downloadFile(type) {
     window.location.href = '/download/' + type;
 }
+
+// ==================== JIRA ANALYSIS FUNCTIONS ====================
+
+const jiraStatusBox = document.getElementById('jiraStatusBox');
+const jiraAnalyzeBtn = document.getElementById('jiraAnalyzeBtn');
+
+function showJiraStatus(message, type = 'info') {
+    jiraStatusBox.textContent = message;
+    jiraStatusBox.className = 'status-box ' + type;
+    jiraStatusBox.classList.remove('hidden');
+}
+
+function hideJiraStatus() {
+    jiraStatusBox.classList.add('hidden');
+}
+
+function getJiraCredentials() {
+    return {
+        jira_url: document.getElementById('jiraUrl').value.trim(),
+        email: document.getElementById('jiraEmail').value.trim(),
+        api_token: document.getElementById('jiraToken').value.trim(),
+        project_key: document.getElementById('projectKey').value.trim().toUpperCase(),
+        max_issues: parseInt(document.getElementById('maxIssues').value) || 1000,
+        bugs_only: document.getElementById('bugsOnly').checked
+    };
+}
+
+async function testJiraConnection() {
+    const creds = getJiraCredentials();
+
+    if (!creds.jira_url || !creds.email || !creds.api_token) {
+        showJiraStatus('Please fill in JIRA URL, Email, and API Token', 'error');
+        return;
+    }
+
+    showJiraStatus('Testing connection...', 'info');
+    jiraAnalyzeBtn.disabled = true;
+
+    try {
+        const res = await fetch('/api/jira/test', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(creds)
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+            showJiraStatus(`✓ Connected: ${data.message}`, 'success');
+        } else {
+            showJiraStatus(`✗ ${data.message}`, 'error');
+        }
+    } catch (e) {
+        showJiraStatus(`Connection error: ${e.message}`, 'error');
+    }
+
+    jiraAnalyzeBtn.disabled = false;
+}
+
+async function loadProjects() {
+    const creds = getJiraCredentials();
+
+    if (!creds.jira_url || !creds.email || !creds.api_token) {
+        showJiraStatus('Please fill in JIRA credentials to load projects', 'error');
+        return;
+    }
+
+    const btn = document.getElementById('loadProjectsBtn');
+    btn.disabled = true;
+    btn.textContent = 'Loading...';
+
+    try {
+        const params = new URLSearchParams({
+            jira_url: creds.jira_url,
+            email: creds.email,
+            api_token: creds.api_token
+        });
+
+        const res = await fetch(`/api/jira/projects?${params}`);
+        const data = await res.json();
+
+        const projectList = document.getElementById('projectList');
+
+        if (data.success && data.projects.length > 0) {
+            projectList.innerHTML = data.projects.map(p => `
+                <div class="project-item" onclick="selectProject('${p.key}')">
+                    <span class="project-key">${p.key}</span>
+                    <span class="project-name">${p.name}</span>
+                </div>
+            `).join('');
+            projectList.classList.remove('hidden');
+            showJiraStatus(`Found ${data.projects.length} projects`, 'success');
+        } else {
+            projectList.classList.add('hidden');
+            showJiraStatus(data.error || 'No projects found', 'error');
+        }
+    } catch (e) {
+        showJiraStatus(`Error loading projects: ${e.message}`, 'error');
+    }
+
+    btn.disabled = false;
+    btn.textContent = 'Load Projects';
+}
+
+function selectProject(key) {
+    document.getElementById('projectKey').value = key;
+    document.getElementById('projectList').classList.add('hidden');
+}
+
+async function analyzeJiraProject() {
+    const creds = getJiraCredentials();
+
+    if (!creds.jira_url || !creds.email || !creds.api_token) {
+        showJiraStatus('Please fill in JIRA credentials', 'error');
+        return;
+    }
+
+    if (!creds.project_key) {
+        showJiraStatus('Please enter a project key', 'error');
+        return;
+    }
+
+    hideJiraStatus();
+    jiraAnalyzeBtn.disabled = true;
+    jiraAnalyzeBtn.innerHTML = '<span class="spinner" style="width:16px;height:16px;border-width:2px;"></span> Analyzing...';
+
+    try {
+        const res = await fetch('/api/jira/analyze', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(creds)
+        });
+
+        const data = await res.json();
+
+        if (data.error) {
+            showJiraStatus(`✗ ${data.error}`, 'error');
+            jiraAnalyzeBtn.disabled = false;
+            jiraAnalyzeBtn.innerHTML = '<span class="btn-icon">🤖</span> Analyze Project';
+            return;
+        }
+
+        showJiraStatus(`✓ Analysis complete! Found ${data.total_issues_fetched} issues, ${data.stats.total_modules} modules analyzed`, 'success');
+
+        // Store JIRA data
+        jiraData = data;
+        allModules = data.modules;
+        allFeatures = data.features;
+
+        // Render dashboard
+        renderDashboard(data.stats, data.modules, data.features);
+
+        // Show dashboard
+        document.getElementById('dashboard').classList.remove('hidden');
+        document.getElementById('dashboard').scrollIntoView({ behavior: 'smooth' });
+        loadHistory();
+
+    } catch (e) {
+        showJiraStatus(`Error: ${e.message}`, 'error');
+    }
+
+    jiraAnalyzeBtn.disabled = false;
+    jiraAnalyzeBtn.innerHTML = '<span class="btn-icon">🤖</span> Analyze Project';
+}
+
+// ==================== NAVIGATION ====================
+
 document.querySelectorAll('.nav-link').forEach(link => {
-    link.addEventListener('click', () => {
+    link.addEventListener('click', (e) => {
+        e.preventDefault();
         document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
         link.classList.add('active');
+
+        const target = link.getAttribute('href');
+        document.querySelectorAll('.section').forEach(s => s.classList.add('hidden'));
+        document.querySelector(target).classList.remove('hidden');
     });
 });
+
 loadHistory();

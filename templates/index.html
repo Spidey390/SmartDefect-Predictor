@@ -23,6 +23,7 @@
         </div>
         <nav>
             <a href="#upload" class="nav-link active">Upload</a>
+            <a href="#jira" class="nav-link">JIRA Analysis</a>
             <a href="#dashboard" class="nav-link">Dashboard</a>
             <a href="#history" class="nav-link">History</a>
         </nav>
@@ -54,6 +55,100 @@
             <div id="loadingBox" class="loading-box hidden">
                 <div class="spinner"></div>
                 <p>Running KMeans clustering…</p>
+            </div>
+        </section>
+        <section id="jira" class="section hidden">
+            <div class="section-header">
+                <h2>JIRA <span class="accent-glow">Project Analysis</span></h2>
+            </div>
+            <div class="jira-config-card">
+                <h3>Connect to JIRA</h3>
+                <p class="subtitle">Fetch issues directly from your JIRA project and analyze defect patterns</p>
+
+                <div class="jira-form">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="jiraUrl">JIRA URL</label>
+                            <input type="text" id="jiraUrl" placeholder="https://your-domain.atlassian.net" value="">
+                            <small>e.g., https://company.atlassian.net</small>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="jiraEmail">Email</label>
+                            <input type="email" id="jiraEmail" placeholder="your-email@example.com">
+                        </div>
+                        <div class="form-group">
+                            <label for="jiraToken">API Token</label>
+                            <input type="password" id="jiraToken" placeholder="Your JIRA API token">
+                            <small>Generate at <a href="https://id.atlassian.com/manage/api-tokens" target="_blank">id.atlassian.com</a></small>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="projectKey">Project Key</label>
+                            <input type="text" id="projectKey" placeholder="PROJ" style="text-transform: uppercase;">
+                            <button type="button" class="btn btn-sm btn-outline" onclick="loadProjects()" id="loadProjectsBtn" style="margin-top: 8px;">Load Projects</button>
+                            <div id="projectList" class="project-list hidden"></div>
+                        </div>
+                        <div class="form-group">
+                            <label for="maxIssues">Max Issues</label>
+                            <input type="number" id="maxIssues" value="1000" min="100" max="5000">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group checkbox-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="bugsOnly">
+                                <span>Analyze bugs only</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="jira-actions">
+                        <button class="btn btn-outline" onclick="testJiraConnection()">
+                            <span class="btn-icon">🔌</span> Test Connection
+                        </button>
+                        <button class="btn btn-primary" onclick="analyzeJiraProject()" id="jiraAnalyzeBtn">
+                            <span class="btn-icon">🤖</span> Analyze Project
+                        </button>
+                    </div>
+
+                    <div id="jiraStatusBox" class="status-box hidden"></div>
+                </div>
+            </div>
+
+            <div class="jira-info-grid">
+                <div class="info-card">
+                    <h4>📋 What it does</h4>
+                    <ul>
+                        <li>Fetches issues from JIRA API</li>
+                        <li>Extracts bug counts and priorities</li>
+                        <li>Groups by components/labels</li>
+                        <li>Calculates risk metrics</li>
+                    </ul>
+                </div>
+                <div class="info-card">
+                    <h4>🔐 Security</h4>
+                    <ul>
+                        <li>Credentials never stored</li>
+                        <li>Session-based only</li>
+                        <li>Uses Atlassian API tokens</li>
+                        <li>No data sent externally</li>
+                    </ul>
+                </div>
+                <div class="info-card">
+                    <h4>📊 Output</h4>
+                    <ul>
+                        <li>Risk classification (H/M/L)</li>
+                        <li>Defect density metrics</li>
+                        <li>Priority distribution</li>
+                        <li>Exportable CSV reports</li>
+                    </ul>
+                </div>
             </div>
         </section>
         <section id="dashboard" class="section hidden">
