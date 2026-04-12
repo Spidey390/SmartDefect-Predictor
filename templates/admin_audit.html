@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audit Log — ModuleRisk Admin</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="noise"></div>
+    <header class="admin-header">
+        <div class="logo">
+            <span class="logo-icon">⬡</span>
+            <span class="logo-text">ModuleRisk</span>
+            <span class="logo-tag admin-tag">ADMIN</span>
+        </div>
+        <nav>
+            <span class="user-info">👤 <span id="currentUsername"></span></span>
+            <a href="/admin/dashboard" class="nav-link">Dashboard</a>
+            <a href="/admin/users" class="nav-link">Users</a>
+            <a href="/admin/audit" class="nav-link active">Audit Log</a>
+            <a href="/dashboard" class="nav-link">Analysis</a>
+            <a href="/api/auth/logout" class="btn btn-sm btn-outline">Logout</a>
+        </nav>
+    </header>
+
+    <main>
+        <section class="section">
+            <div class="section-header">
+                <h2>Security <span class="accent-glow">Audit Log</span></h2>
+                <button class="btn btn-sm btn-outline" onclick="loadAuditLog()">↻ Refresh</button>
+            </div>
+
+            <div class="table-card">
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>User</th>
+                                <th>Action</th>
+                                <th>Resource</th>
+                                <th>IP Address</th>
+                                <th>Details</th>
+                            </tr>
+                        </thead>
+                        <tbody id="auditBody">
+                            <tr><td colspan="6" class="empty-row">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        async function loadAuditLog() {
+            try {
+                const res = await fetch('/api/admin/recent-activity');
+                const data = await res.json();
+
+                if (data.success) {
+                    const body = document.getElementById('auditBody');
+
+                    if (!data.activities.length) {
+                        body.innerHTML = '<tr><td colspan="6" class="empty-row">No audit entries yet</td></tr>';
+                        return;
+                    }
+
+                    body.innerHTML = data.activities.map(a => `
+                        <tr>
+                            <td>${new Date(a.timestamp).toLocaleString()}</td>
+                            <td>${a.username}</td>
+                            <td><span class="badge">${a.action}</span></td>
+                            <td>${a.resource || '-'}</td>
+                            <td style="font-family:var(--mono)">${a.ip_address || '-'}</td>
+                            <td>${a.details || '-'}</td>
+                        </tr>
+                    `).join('');
+                }
+            } catch (e) {
+                console.error('Audit log load error:', e);
+                document.getElementById('auditBody').innerHTML = '<tr><td colspan="6" class="empty-row">Error loading audit log</td></tr>';
+            }
+        }
+
+        loadAuditLog();
+    </script>
+</body>
+</html>

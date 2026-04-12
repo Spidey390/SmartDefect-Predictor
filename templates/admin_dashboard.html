@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard — ModuleRisk</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body>
+    <div class="noise"></div>
+    <header class="admin-header">
+        <div class="logo">
+            <span class="logo-icon">⬡</span>
+            <span class="logo-text">ModuleRisk</span>
+            <span class="logo-tag admin-tag">ADMIN</span>
+        </div>
+        <nav>
+            <span class="user-info">👤 <span id="currentUsername"></span></span>
+            <a href="/admin/users" class="nav-link">Users</a>
+            <a href="/admin/audit" class="nav-link">Audit Log</a>
+            <a href="/dashboard" class="nav-link">Analysis</a>
+            <a href="/api/auth/logout" class="btn btn-sm btn-outline">Logout</a>
+        </nav>
+    </header>
+
+    <main>
+        <section class="section">
+            <div class="section-header">
+                <h2>Admin <span class="accent-glow">Dashboard</span></h2>
+            </div>
+
+            <div class="admin-stats-grid">
+                <div class="stat-card stat-total">
+                    <div class="stat-icon">👥</div>
+                    <div class="stat-value" id="totalUsers">0</div>
+                    <div class="stat-label">Total Users</div>
+                </div>
+                <div class="stat-card stat-high">
+                    <div class="stat-icon">👤</div>
+                    <div class="stat-value" id="regularUsers">0</div>
+                    <div class="stat-label">Regular Users</div>
+                </div>
+                <div class="stat-card stat-medium">
+                    <div class="stat-icon">🔧</div>
+                    <div class="stat-value" id="adminUsers">0</div>
+                    <div class="stat-label">Admins</div>
+                </div>
+                <div class="stat-card stat-low">
+                    <div class="stat-icon">📊</div>
+                    <div class="stat-value" id="totalAnalyses">0</div>
+                    <div class="stat-label">Total Analyses</div>
+                </div>
+            </div>
+
+            <div class="admin-grid">
+                <div class="admin-card">
+                    <h3>🔐 Quick Actions</h3>
+                    <div class="quick-actions">
+                        <button class="btn btn-sm btn-primary" onclick="window.location.href='/admin/users'">Manage Users</button>
+                        <button class="btn btn-sm btn-outline" onclick="window.location.href='/admin/audit'">View Audit Log</button>
+                        <button class="btn btn-sm btn-outline" onclick="window.location.href='/admin/settings'">System Settings</button>
+                    </div>
+                </div>
+
+                <div class="admin-card">
+                    <h3>📈 Recent Activity</h3>
+                    <div id="recentActivity" class="activity-list">
+                        <p class="empty-row">Loading...</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="admin-card">
+                <h3>📋 System Information</h3>
+                <div class="system-info">
+                    <div class="info-row">
+                        <span class="info-label">Application:</span>
+                        <span class="info-value">SmartDefect Predictor v1.0</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Environment:</span>
+                        <span class="info-value" id="envInfo">Production</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Database:</span>
+                        <span class="info-value">SQLite</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Last Login:</span>
+                        <span class="info-value" id="lastLogin">-</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        async function loadAdminDashboard() {
+            try {
+                // Get current user info
+                const userRes = await fetch('/api/auth/me');
+                const userData = await userRes.json();
+
+                if (userData.user) {
+                    document.getElementById('currentUsername').textContent = userData.user.username;
+                    document.getElementById('lastLogin').textContent = new Date().toLocaleString();
+                }
+
+                // Load dashboard stats
+                const statsRes = await fetch('/api/admin/stats');
+                const statsData = await statsRes.json();
+
+                if (statsData.success) {
+                    document.getElementById('totalUsers').textContent = statsData.stats.total_users;
+                    document.getElementById('regularUsers').textContent = statsData.stats.regular_users;
+                    document.getElementById('adminUsers').textContent = statsData.stats.admin_users;
+                    document.getElementById('totalAnalyses').textContent = statsData.stats.total_analyses;
+                }
+
+                // Load recent activity
+                const activityRes = await fetch('/api/admin/recent-activity');
+                const activityData = await activityRes.json();
+
+                if (activityData.activities && activityData.activities.length > 0) {
+                    document.getElementById('recentActivity').innerHTML = activityData.activities.map(a => `
+                        <div class="activity-item">
+                            <span class="activity-user">${a.username}</span>
+                            <span class="activity-action">${a.action}</span>
+                            <span class="activity-time">${new Date(a.timestamp).toLocaleString()}</span>
+                        </div>
+                    `).join('');
+                } else {
+                    document.getElementById('recentActivity').innerHTML = '<p class="empty-row">No recent activity</p>';
+                }
+
+            } catch (e) {
+                console.error('Dashboard load error:', e);
+            }
+        }
+
+        loadAdminDashboard();
+    </script>
+</body>
+
+</html>

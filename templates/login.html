@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login — ModuleRisk Defect Prediction</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body class="auth-body">
+    <div class="noise"></div>
+    <div class="auth-container">
+        <div class="auth-card">
+            <div class="auth-header">
+                <div class="logo">
+                    <span class="logo-icon">⬡</span>
+                    <span class="logo-text">ModuleRisk</span>
+                </div>
+                <p class="auth-subtitle">Sign in to your account</p>
+            </div>
+
+            <div class="auth-tabs">
+                <button class="auth-tab active" data-role="user">User Login</button>
+                <button class="auth-tab" data-role="admin">Admin Login</button>
+            </div>
+
+            <form id="loginForm" class="auth-form">
+                <div class="form-group">
+                    <label for="username">Username or Email</label>
+                    <input type="text" id="username" name="username" placeholder="Enter your username" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" name="password" placeholder="Enter your password" required>
+                </div>
+
+                <div class="form-group checkbox-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="remember" name="remember">
+                        <span>Remember me</span>
+                    </label>
+                </div>
+
+                <div id="errorBox" class="error-box hidden"></div>
+
+                <button type="submit" class="btn btn-primary btn-full">
+                    <span class="btn-icon">🔐</span> Sign In
+                </button>
+            </form>
+
+            <div class="auth-footer">
+                <p>Don't have an account? <a href="/register">Register here</a></p>
+            </div>
+
+            <div class="demo-credentials">
+                <p><strong>Demo Credentials:</strong></p>
+                <p>User: <code>user / user123</code></p>
+                <p>Admin: <code>admin / admin123</code></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const loginForm = document.getElementById('loginForm');
+        const errorBox = document.getElementById('errorBox');
+        const tabs = document.querySelectorAll('.auth-tab');
+
+        let selectedRole = 'user';
+
+        tabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                tabs.forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                selectedRole = tab.dataset.role;
+            });
+        });
+
+        function showError(msg) {
+            errorBox.textContent = '⚠ ' + msg;
+            errorBox.classList.remove('hidden');
+        }
+
+        function hideError() {
+            errorBox.classList.add('hidden');
+        }
+
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            hideError();
+
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const remember = document.getElementById('remember').checked;
+
+            const submitBtn = loginForm.querySelector('button[type="submit"]');
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="spinner" style="width:16px;height:16px;border-width:2px;"></span> Signing in...';
+
+            try {
+                const res = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password, role: selectedRole, remember })
+                });
+
+                const data = await res.json();
+
+                if (data.error) {
+                    showError(data.error);
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '<span class="btn-icon">🔐</span> Sign In';
+                    return;
+                }
+
+                // Redirect based on role
+                if (data.role === 'admin') {
+                    window.location.href = '/admin/dashboard';
+                } else {
+                    window.location.href = '/dashboard';
+                }
+
+            } catch (e) {
+                showError('Connection error: ' + e.message);
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<span class="btn-icon">🔐</span> Sign In';
+            }
+        });
+    </script>
+</body>
+
+</html>

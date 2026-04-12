@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Management — ModuleRisk Admin</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="noise"></div>
+    <header class="admin-header">
+        <div class="logo">
+            <span class="logo-icon">⬡</span>
+            <span class="logo-text">ModuleRisk</span>
+            <span class="logo-tag admin-tag">ADMIN</span>
+        </div>
+        <nav>
+            <span class="user-info">👤 <span id="currentUsername"></span></span>
+            <a href="/admin/dashboard" class="nav-link">Dashboard</a>
+            <a href="/admin/users" class="nav-link active">Users</a>
+            <a href="/admin/audit" class="nav-link">Audit Log</a>
+            <a href="/dashboard" class="nav-link">Analysis</a>
+            <a href="/api/auth/logout" class="btn btn-sm btn-outline">Logout</a>
+        </nav>
+    </header>
+
+    <main>
+        <section class="section">
+            <div class="section-header">
+                <h2>User <span class="accent-glow">Management</span></h2>
+                <button class="btn btn-sm btn-primary" onclick="showAddUserModal()">+ Add User</button>
+            </div>
+
+            <div class="table-card">
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Username</th>
+                                <th>Email</th>
+                                <th>Role</th>
+                                <th>Created</th>
+                                <th>Last Login</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usersBody">
+                            <tr><td colspan="8" class="empty-row">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        async function loadUsers() {
+            try {
+                const res = await fetch('/api/admin/users');
+                const data = await res.json();
+
+                if (data.success) {
+                    const body = document.getElementById('usersBody');
+                    body.innerHTML = data.users.map(u => `
+                        <tr>
+                            <td>${u.id}</td>
+                            <td>${u.username}</td>
+                            <td>${u.email}</td>
+                            <td><span class="badge badge-${u.role === 'admin' ? 'high' : 'low'}">${u.role.toUpperCase()}</span></td>
+                            <td>${new Date(u.created_at).toLocaleDateString()}</td>
+                            <td>${u.last_login ? new Date(u.last_login).toLocaleString() : 'Never'}</td>
+                            <td>${u.is_active ? '<span style="color:var(--rate)">Active</span>' : '<span style="color:var(--high)">Inactive</span>'}</td>
+                            <td>
+                                <button class="btn btn-sm btn-outline" onclick="toggleUserStatus(${u.id}, ${u.is_active})">
+                                    ${u.is_active ? 'Deactivate' : 'Activate'}
+                                </button>
+                            </td>
+                        </tr>
+                    `).join('');
+                }
+            } catch (e) {
+                console.error('Users load error:', e);
+                document.getElementById('usersBody').innerHTML = '<tr><td colspan="8" class="empty-row">Error loading users</td></tr>';
+            }
+        }
+
+        async function toggleUserStatus(userId, currentStatus) {
+            // TODO: Implement toggle status API
+            alert('User status toggle coming soon!');
+        }
+
+        function showAddUserModal() {
+            alert('Add user modal coming soon!');
+        }
+
+        loadUsers();
+    </script>
+</body>
+</html>

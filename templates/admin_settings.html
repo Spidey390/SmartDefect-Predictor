@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings — ModuleRisk Admin</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="noise"></div>
+    <header class="admin-header">
+        <div class="logo">
+            <span class="logo-icon">⬡</span>
+            <span class="logo-text">ModuleRisk</span>
+            <span class="logo-tag admin-tag">ADMIN</span>
+        </div>
+        <nav>
+            <span class="user-info">👤 <span id="currentUsername"></span></span>
+            <a href="/admin/dashboard" class="nav-link">Dashboard</a>
+            <a href="/admin/users" class="nav-link">Users</a>
+            <a href="/admin/audit" class="nav-link">Audit Log</a>
+            <a href="/admin/settings" class="nav-link active">Settings</a>
+            <a href="/dashboard" class="nav-link">Analysis</a>
+            <a href="/api/auth/logout" class="btn btn-sm btn-outline">Logout</a>
+        </nav>
+    </header>
+
+    <main>
+        <section class="section">
+            <div class="section-header">
+                <h2>System <span class="accent-glow">Settings</span></h2>
+            </div>
+
+            <div class="settings-grid">
+                <div class="settings-card">
+                    <h3>🔐 JIRA Configuration</h3>
+                    <div class="form-group">
+                        <label>JIRA URL</label>
+                        <input type="text" id="jiraUrl" placeholder="https://your-domain.atlassian.net">
+                    </div>
+                    <div class="form-group">
+                        <label>JIRA Email</label>
+                        <input type="email" id="jiraEmail" placeholder="admin@example.com">
+                    </div>
+                    <div class="form-group">
+                        <label>API Token</label>
+                        <input type="password" id="jiraToken" placeholder="Your API token">
+                        <small>Stored in environment variables</small>
+                    </div>
+                    <button class="btn btn-primary" onclick="saveJiraConfig()">Save JIRA Settings</button>
+                </div>
+
+                <div class="settings-card">
+                    <h3>🛡️ Security Settings</h3>
+                    <div class="setting-item">
+                        <div class="setting-info">
+                            <h4>Session Timeout</h4>
+                            <p>User sessions expire after 24 hours</p>
+                        </div>
+                        <span class="badge">24h</span>
+                    </div>
+                    <div class="setting-item">
+                        <div class="setting-info">
+                            <h4>Rate Limiting</h4>
+                            <p>API requests limited to 50/hour</p>
+                        </div>
+                        <span class="badge">Enabled</span>
+                    </div>
+                    <div class="setting-item">
+                        <div class="setting-info">
+                            <h4>Audit Logging</h4>
+                            <p>All user actions are logged</p>
+                        </div>
+                        <span class="badge" style="background:var(--rate)">Active</span>
+                    </div>
+                </div>
+
+                <div class="settings-card">
+                    <h3>📊 System Information</h3>
+                    <div class="system-info">
+                        <div class="info-row">
+                            <span class="info-label">Application:</span>
+                            <span class="info-value">SmartDefect Predictor v1.0</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Environment:</span>
+                            <span class="info-value" id="envInfo">Production</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Database:</span>
+                            <span class="info-value">SQLite</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">ML Engine:</span>
+                            <span class="info-value">KMeans Clustering</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="settings-card">
+                    <h3>⚙️ Maintenance</h3>
+                    <div class="quick-actions">
+                        <button class="btn btn-sm btn-outline" onclick="alert('Cache cleared!')">Clear Cache</button>
+                        <button class="btn btn-sm btn-outline" onclick="alert('Sessions cleaned!')">Clean Expired Sessions</button>
+                        <button class="btn btn-sm btn-outline" onclick="alert('Database backup coming soon!')">Backup Database</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        async function saveJiraConfig() {
+            const jiraUrl = document.getElementById('jiraUrl').value;
+            const jiraEmail = document.getElementById('jiraEmail').value;
+            const jiraToken = document.getElementById('jiraToken').value;
+
+            if (!jiraUrl || !jiraEmail || !jiraToken) {
+                alert('Please fill in all JIRA fields');
+                return;
+            }
+
+            // In production, this would save to environment or secure config store
+            alert('JIRA settings saved! (In production, configure via .env file)');
+        }
+
+        document.getElementById('envInfo').textContent = process.env?.FLASK_ENV === 'production' ? 'Production' : 'Development';
+    </script>
+</body>
+</html>

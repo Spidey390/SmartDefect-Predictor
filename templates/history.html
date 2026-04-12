@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>History — ModuleRisk</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="noise"></div>
+    <header>
+        <div class="logo">
+            <span class="logo-icon">⬡</span>
+            <span class="logo-text">ModuleRisk</span>
+            <span class="logo-tag">Defect Prediction</span>
+        </div>
+        <nav>
+            <span class="user-info">👤 <span id="currentUsername"></span></span>
+            <a href="/dashboard" class="nav-link">Analysis</a>
+            <a href="/history" class="nav-link active">History</a>
+            <a href="/profile" class="nav-link">Profile</a>
+            <a href="/api/auth/logout" class="btn btn-sm btn-outline">Logout</a>
+        </nav>
+    </header>
+
+    <main>
+        <section class="section">
+            <div class="section-header">
+                <h2>Analysis <span class="accent-glow">History</span></h2>
+                <button class="btn btn-sm btn-outline" onclick="loadHistory()">↻ Refresh</button>
+            </div>
+            <div class="table-card">
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Filename</th>
+                                <th>Timestamp</th>
+                                <th>Total</th>
+                                <th>High</th>
+                                <th>Medium</th>
+                                <th>Low</th>
+                                <th>Success Rate</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historyBody">
+                            <tr>
+                                <td colspan="8" class="empty-row">Loading...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        document.getElementById('currentUsername').textContent = 'User';
+
+        async function loadHistory() {
+            try {
+                const res = await fetch('/api/history');
+                const rows = await res.json();
+                const body = document.getElementById('historyBody');
+
+                if (!rows.length) {
+                    body.innerHTML = '<tr><td colspan="8" class="empty-row">No history yet. Run an analysis first.</td></tr>';
+                    return;
+                }
+
+                body.innerHTML = rows.map(r => {
+                    const ts = new Date(r.timestamp).toLocaleString();
+                    return `<tr>
+                        <td>${r.id}</td>
+                        <td>${r.filename}</td>
+                        <td>${ts}</td>
+                        <td>${r.total_modules}</td>
+                        <td style="color:var(--high)">${r.high_risk}</td>
+                        <td style="color:var(--medium)">${r.medium_risk}</td>
+                        <td style="color:var(--low)">${r.low_risk}</td>
+                        <td style="color:var(--rate)">${r.success_rate}%</td>
+                    </tr>`;
+                }).join('');
+            } catch (e) {
+                console.error('History load error:', e);
+                document.getElementById('historyBody').innerHTML = '<tr><td colspan="8" class="empty-row">Error loading history</td></tr>';
+            }
+        }
+
+        loadHistory();
+    </script>
+</body>
+</html>

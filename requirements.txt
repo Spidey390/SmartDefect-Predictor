@@ -5,3 +5,6 @@ scikit-learn
 gunicorn
 requests
 python-dotenv
+flask-cors
+flask-limiter
+redis

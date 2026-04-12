@@ -54,7 +54,7 @@ class JiraService:
 
     def get_project_issues(self, project_key: str, max_results: int = 1000) -> Dict[str, Any]:
         """
-        Fetch all issues from a JIRA project
+        Fetch all issues from a JIRA project using JIRA API v3
 
         Args:
             project_key: JIRA project key (e.g., 'PROJ')
@@ -71,15 +71,28 @@ class JiraService:
             batch_size = min(100, max_results)
 
             while start_at < max_results:
-                response = self.session.get(
-                    f'{self.base_url}/rest/api/3/search',
-                    params={
+                # Use JIRA API v3 search endpoint with proper pagination
+                response = self.session.post(
+                    f'{self.base_url}/rest/api/3/search/jql',
+                    json={
                         'jql': jql,
+                        'fields': ['key', 'summary', 'issuetype', 'priority', 'status', 'created', 'updated', 'labels', 'components'],
                         'startAt': start_at,
-                        'maxResults': batch_size,
-                        'fields': 'key,summary,issuetype,priority,status,created,updated,labels,components'
+                        'maxResults': batch_size
                     }
                 )
+
+                if response.status_code == 404:
+                    # Fallback to standard search endpoint if JQL endpoint not available
+                    response = self.session.get(
+                        f'{self.base_url}/rest/api/3/search',
+                        params={
+                            'jql': jql,
+                            'startAt': start_at,
+                            'maxResults': batch_size,
+                            'fields': 'key,summary,issuetype,priority,status,created,updated,labels,components'
+                        }
+                    )
 
                 if response.status_code != 200:
                     return {
@@ -89,10 +102,15 @@ class JiraService:
                     }
 
                 data = response.json()
-                issues.extend(data.get('issues', []))
+                batch_issues = data.get('issues', [])
+
+                if not batch_issues:
+                    break
+
+                issues.extend(batch_issues)
 
                 total = data.get('total', 0)
-                if start_at + batch_size >= total or start_at + batch_size >= max_results:
+                if len(batch_issues) < batch_size or start_at + batch_size >= total or start_at + batch_size >= max_results:
                     break
                 start_at += batch_size
 
@@ -111,7 +129,7 @@ class JiraService:
 
     def get_bugs_only(self, project_key: str, max_results: int = 500) -> Dict[str, Any]:
         """
-        Fetch only bug issues from a JIRA project
+        Fetch only bug issues from a JIRA project using JIRA API v3
 
         Args:
             project_key: JIRA project key
@@ -128,15 +146,28 @@ class JiraService:
             batch_size = min(100, max_results)
 
             while start_at < max_results:
-                response = self.session.get(
-                    f'{self.base_url}/rest/api/3/search',
-                    params={
+                # Use JIRA API v3 search endpoint with proper pagination
+                response = self.session.post(
+                    f'{self.base_url}/rest/api/3/search/jql',
+                    json={
                         'jql': jql,
+                        'fields': ['key', 'summary', 'issuetype', 'priority', 'status', 'created', 'updated', 'labels', 'components'],
                         'startAt': start_at,
-                        'maxResults': batch_size,
-                        'fields': 'key,summary,issuetype,priority,status,created,updated,labels,components'
+                        'maxResults': batch_size
                     }
                 )
+
+                if response.status_code == 404:
+                    # Fallback to standard search endpoint if JQL endpoint not available
+                    response = self.session.get(
+                        f'{self.base_url}/rest/api/3/search',
+                        params={
+                            'jql': jql,
+                            'startAt': start_at,
+                            'maxResults': batch_size,
+                            'fields': 'key,summary,issuetype,priority,status,created,updated,labels,components'
+                        }
+                    )
 
                 if response.status_code != 200:
                     return {
@@ -146,10 +177,15 @@ class JiraService:
                     }
 
                 data = response.json()
-                issues.extend(data.get('issues', []))
+                batch_issues = data.get('issues', [])
+
+                if not batch_issues:
+                    break
+
+                issues.extend(batch_issues)
 
                 total = data.get('total', 0)
-                if start_at + batch_size >= total or start_at + batch_size >= max_results:
+                if len(batch_issues) < batch_size or start_at + batch_size >= total or start_at + batch_size >= max_results:
                     break
                 start_at += batch_size
 
@@ -178,6 +214,28 @@ class JiraService:
                 return {
                     'success': True,
                     'issue_types': issue_types
+                }
+            return {
+                'success': False,
+                'message': f'Error: {response.status_code}'
+            }
+        except Exception as e:
+            return {
+                'success': False,
+                'message': f'Error: {str(e)}'
+            }
+
+    def get_projects(self) -> Dict[str, Any]:
+        """Get all accessible projects for the authenticated user"""
+        try:
+            response = self.session.get(
+                f'{self.base_url}/rest/api/3/project'
+            )
+            if response.status_code == 200:
+                projects = response.json()
+                return {
+                    'success': True,
+                    'projects': projects
                 }
             return {
                 'success': False,

@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profile — ModuleRisk</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="noise"></div>
+    <header>
+        <div class="logo">
+            <span class="logo-icon">⬡</span>
+            <span class="logo-text">ModuleRisk</span>
+            <span class="logo-tag">Defect Prediction</span>
+        </div>
+        <nav>
+            <span class="user-info">👤 <span id="currentUsername"></span></span>
+            <a href="/dashboard" class="nav-link">Analysis</a>
+            <a href="/history" class="nav-link">History</a>
+            <a href="/profile" class="nav-link active">Profile</a>
+            <a href="/api/auth/logout" class="btn btn-sm btn-outline">Logout</a>
+        </nav>
+    </header>
+
+    <main>
+        <section class="section">
+            <div class="section-header">
+                <h2>User <span class="accent-glow">Profile</span></h2>
+            </div>
+
+            <div class="profile-card">
+                <div class="profile-header">
+                    <div class="profile-avatar">👤</div>
+                    <div class="profile-info">
+                        <h3 id="profileUsername">Loading...</h3>
+                        <p id="profileEmail" class="text-muted">Loading...</p>
+                        <span id="profileRole" class="badge">User</span>
+                    </div>
+                </div>
+
+                <div class="profile-stats">
+                    <div class="stat-item">
+                        <span class="stat-label">Member Since</span>
+                        <span class="stat-value" id="memberSince">-</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Last Login</span>
+                        <span class="stat-value" id="lastLogin">-</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Analyses Run</span>
+                        <span class="stat-value" id="analysisCount">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="profile-actions">
+                <button class="btn btn-outline" onclick="alert('Password change feature coming soon!')">Change Password</button>
+                <button class="btn btn-outline" onclick="alert('Profile settings coming soon!')">Edit Profile</button>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        async function loadProfile() {
+            try {
+                const res = await fetch('/api/auth/me');
+                const data = await res.json();
+
+                if (data.user) {
+                    document.getElementById('currentUsername').textContent = data.user.username;
+                    document.getElementById('profileUsername').textContent = data.user.username;
+                    document.getElementById('profileEmail').textContent = data.user.email || 'Not set';
+                    document.getElementById('profileRole').textContent = data.user.role.toUpperCase();
+                    document.getElementById('memberSince').textContent = new Date().toLocaleDateString();
+                    document.getElementById('lastLogin').textContent = new Date().toLocaleString();
+                }
+            } catch (e) {
+                console.error('Profile load error:', e);
+            }
+        }
+
+        loadProfile();
+    </script>
+</body>
+</html>

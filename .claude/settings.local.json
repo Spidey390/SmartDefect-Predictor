@@ -5,7 +5,8 @@
       "Bash(python -c \"from services.jira_service import JiraService; from services.data_processor import group_by_component, create_ml_dataset; print\\('Services imported successfully'\\)\")",
       "Bash(python -c \"from app import app; print\\('Flask app loaded successfully'\\)\")",
       "Bash(python app.py)",
-      "Bash(git config:*)"
+      "Bash(git config:*)",
+      "Bash(python -c \"import app; print\\('App imports successfully!'\\)\")"
     ]
   }
 }
