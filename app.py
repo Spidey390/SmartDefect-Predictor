@@ -36,7 +36,8 @@ from services.auth_service import (
     login_required,
     admin_required,
     get_current_user,
-    cleanup_expired_sessions
+    cleanup_expired_sessions,
+    create_user_from_google
 )
 
 # Load environment variables
@@ -56,6 +57,24 @@ app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SECURE'] = os.environ.get('FLASK_ENV') == 'production'
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=24)
+
+# Configure Google OAuth
+from authlib.integrations.flask_client import OAuth
+
+oauth = OAuth(app)
+google_client_id = os.environ.get('GOOGLE_CLIENT_ID')
+google_client_secret = os.environ.get('GOOGLE_CLIENT_SECRET')
+
+if google_client_id and google_client_secret:
+    oauth.register(
+        name='google',
+        client_id=google_client_id,
+        client_secret=google_client_secret,
+        server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
+        client_kwargs={
+            'scope': 'openid email profile'
+        }
+    )
 
 # Initialize CORS for API endpoints
 CORS(app, resources={r"/api/*": {"origins": "*"}})
@@ -206,6 +225,54 @@ def get_current_user_api():
     if user:
         return jsonify({'success': True, 'user': user})
     return jsonify({'success': False, 'user': None})
+
+
+@app.route('/api/auth/google')
+def google_login():
+    """Initiate Google OAuth login"""
+    if not google_client_id:
+        return redirect(url_for('login', error='Google OAuth not configured. Please check your .env file.'))
+
+    redirect_uri = url_for('google_callback', _external=True)
+    return oauth.google.authorize_redirect(redirect_uri)
+
+
+@app.route('/api/auth/google/callback')
+def google_callback():
+    """Handle Google OAuth callback"""
+    try:
+        token = oauth.google.authorize_access_token()
+        google_user = token.get('userinfo')
+
+        if not google_user:
+            return redirect(url_for('login'))
+
+        # Create or get user from Google info
+        user_info, is_new = create_user_from_google(google_user)
+
+        # Create session
+        session_token = create_user_session(user_info['id'], request.remote_addr)
+
+        # Set Flask session
+        session['user_id'] = user_info['id']
+        session['username'] = user_info['username']
+        session['email'] = user_info['email']
+        session['user_role'] = user_info['role']
+        session['google_auth'] = True
+        session.permanent = True
+
+        log_audit_action(
+            user_info['id'],
+            user_info['username'],
+            'USER_LOGIN_GOOGLE' if not is_new else 'USER_REGISTERED_GOOGLE',
+            ip_address=request.remote_addr
+        )
+
+        return redirect(url_for('user_dashboard'))
+
+    except Exception as e:
+        logger.error(f"Google OAuth error: {str(e)}")
+        return redirect(url_for('login'))
 
 
 @app.route('/unauthorized')
@@ -378,7 +445,24 @@ def upload():
     file.save(filepath)
 
     try:
-        df = pd.read_csv(filepath)
+        # Try reading CSV with flexible parsing to handle inconsistent fields
+        try:
+            df = pd.read_csv(filepath, on_bad_lines='skip', engine='python')
+        except TypeError:
+            # For older pandas versions that don't support on_bad_lines
+            df = pd.read_csv(filepath, error_bad_lines=False, warn_bad_lines=True, engine='python')
+
+        # If CSV has inconsistent columns, try alternative parsing
+        if len(df.columns) == 1:
+            # Try reading with different delimiters
+            for sep in [',', ';', '\t', '|']:
+                try:
+                    df = pd.read_csv(filepath, sep=sep, on_bad_lines='skip', engine='python')
+                    if len(df.columns) > 1:
+                        break
+                except:
+                    continue
+
         numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
         defect_col = None
         for col in df.columns:

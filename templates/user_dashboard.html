@@ -22,9 +22,17 @@
         </div>
         <nav>
             <span class="user-info">👤 <span id="currentUsername"></span></span>
+            {% if session.get('user_role') == 'admin' %}
+            <a href="/admin/dashboard" class="nav-link">Dashboard</a>
+            <a href="/admin/users" class="nav-link">Users</a>
+            <a href="/admin/audit" class="nav-link">Audit Log</a>
+            <a href="/admin/settings" class="nav-link">Settings</a>
+            <a href="/dashboard" class="nav-link active">Analysis</a>
+            {% else %}
             <a href="/dashboard" class="nav-link active">Analysis</a>
             <a href="/history" class="nav-link">History</a>
             <a href="/profile" class="nav-link">Profile</a>
+            {% endif %}
             <a href="/api/auth/logout" class="btn btn-sm btn-outline">Logout</a>
         </nav>
     </header>
@@ -247,6 +255,7 @@
         </section>
     </main>
 
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script src="/static/script.js"></script>
     <script>
         // Load current user info

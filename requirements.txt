@@ -7,4 +7,6 @@ requests
 python-dotenv
 flask-cors
 flask-limiter
-redis
+flask-session
+authlib
+httpx

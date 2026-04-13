@@ -347,13 +347,16 @@ async function analyzeJiraProject() {
 
 document.querySelectorAll('.nav-link').forEach(link => {
     link.addEventListener('click', (e) => {
-        e.preventDefault();
-        document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
-        link.classList.add('active');
-
         const target = link.getAttribute('href');
-        document.querySelectorAll('.section').forEach(s => s.classList.add('hidden'));
-        document.querySelector(target).classList.remove('hidden');
+        if (target && target.startsWith('#')) {
+            e.preventDefault();
+            document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+            link.classList.add('active');
+
+            document.querySelectorAll('.section').forEach(s => s.classList.add('hidden'));
+            const targetEl = document.querySelector(target);
+            if (targetEl) targetEl.classList.remove('hidden');
+        }
     });
 });
 

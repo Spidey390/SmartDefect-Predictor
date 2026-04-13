@@ -941,6 +941,46 @@ tbody td {
     text-decoration: underline;
 }
 
+.auth-divider {
+    display: flex;
+    align-items: center;
+    margin: 24px 0;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+}
+
+.auth-divider span {
+    padding: 0 16px;
+    color: var(--text-dim);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.btn-google {
+    background: white;
+    color: #1a1a1a;
+    border: 1px solid var(--border);
+    justify-content: center;
+    align-items: center;
+    transition: all 0.2s;
+}
+
+.btn-google:hover {
+    background: #f8f9fa;
+    border-color: #dadce0;
+}
+
+.google-icon {
+    margin-right: 10px;
+}
+
 .demo-credentials {
     margin-top: 24px;
     padding: 16px;

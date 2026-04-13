@@ -329,3 +329,59 @@ def get_current_user() -> Optional[Dict[str, Any]]:
         'email': session.get('email'),
         'role': session.get('user_role')
     }
+
+
+def create_user_from_google(google_user_info: dict) -> Tuple[Dict[str, Any], bool]:
+    """
+    Create or get user from Google OAuth info
+
+    Returns:
+        Tuple of (user_info, is_new_user)
+    """
+    conn = get_db_connection()
+    c = conn.cursor()
+
+    google_email = google_user_info.get('email')
+
+    # Check if user exists
+    c.execute('SELECT id, username, email, role, is_active FROM users WHERE email = ?', (google_email,))
+    row = c.fetchone()
+
+    if row:
+        # User exists, return existing user
+        conn.close()
+        return {
+            'id': row['id'],
+            'username': row['username'],
+            'email': row['email'],
+            'role': row['role']
+        }, False
+
+    # Create new user from Google info
+    username = google_user_info.get('given_name', google_email.split('@')[0])
+    # Ensure username is unique
+    base_username = username
+    counter = 1
+    while True:
+        c.execute('SELECT COUNT(*) FROM users WHERE username = ?', (username,))
+        if c.fetchone()[0] == 0:
+            break
+        username = f"{base_username}{counter}"
+        counter += 1
+
+    c.execute('''
+        INSERT INTO users (username, email, password_hash, role, created_at)
+        VALUES (?, ?, ?, ?, ?)
+    ''', (username, google_email, 'google_oauth', 'user', datetime.now().isoformat()))
+
+    conn.commit()
+    conn.close()
+
+    log_audit_action(None, username, 'USER_REGISTERED_GOOGLE', ip_address=request.remote_addr)
+
+    return {
+        'id': c.lastrowid,
+        'username': username,
+        'email': google_email,
+        'role': 'user'
+    }, True

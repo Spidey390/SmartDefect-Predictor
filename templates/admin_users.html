@@ -56,6 +56,32 @@
             </div>
         </section>
     </main>
+    <!-- Add User Modal -->
+    <div id="addUserModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:1000; align-items:center; justify-content:center;">
+        <div class="jira-config-card" style="width: 400px; max-width: 90%; background: var(--surface-light); padding: 24px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 20px;">
+                <h3 style="margin:0; font-family:'Syne', sans-serif;">Add New User</h3>
+                <button class="btn btn-sm btn-outline" onclick="closeAddUserModal()" style="padding: 4px 8px;">✕</button>
+            </div>
+            
+            <div class="form-group" style="margin-bottom: 15px;">
+                <label style="display:block; margin-bottom:8px; color:var(--text-muted); font-family:'IBM Plex Mono', monospace; font-size:12px;">Username</label>
+                <input type="text" id="newUsername" placeholder="e.g. john_doe" style="width:100%; background:var(--surface-dark); border:1px solid rgba(255,255,255,0.1); color:var(--text-main); padding:10px; border-radius:6px;">
+            </div>
+            <div class="form-group" style="margin-bottom: 15px;">
+                <label style="display:block; margin-bottom:8px; color:var(--text-muted); font-family:'IBM Plex Mono', monospace; font-size:12px;">Email</label>
+                <input type="email" id="newEmail" placeholder="e.g. john@example.com" style="width:100%; background:var(--surface-dark); border:1px solid rgba(255,255,255,0.1); color:var(--text-main); padding:10px; border-radius:6px;">
+            </div>
+            <div class="form-group" style="margin-bottom: 20px;">
+                <label style="display:block; margin-bottom:8px; color:var(--text-muted); font-family:'IBM Plex Mono', monospace; font-size:12px;">Password</label>
+                <input type="password" id="newPassword" placeholder="Strong password" style="width:100%; background:var(--surface-dark); border:1px solid rgba(255,255,255,0.1); color:var(--text-main); padding:10px; border-radius:6px;">
+            </div>
+            
+            <div id="modalError" class="error-box hidden" style="margin-bottom: 15px; color:var(--high); font-size:14px; display:none;"></div>
+            
+            <button class="btn btn-primary" style="width:100%; justify-content:center;" onclick="submitNewUser()" id="submitUserBtn">Create User</button>
+        </div>
+    </div>
 
     <script>
         async function loadUsers() {
@@ -94,7 +120,56 @@
         }
 
         function showAddUserModal() {
-            alert('Add user modal coming soon!');
+            document.getElementById('addUserModal').style.display = 'flex';
+            document.getElementById('modalError').style.display = 'none';
+            document.getElementById('newUsername').value = '';
+            document.getElementById('newEmail').value = '';
+            document.getElementById('newPassword').value = '';
+        }
+
+        function closeAddUserModal() {
+            document.getElementById('addUserModal').style.display = 'none';
+        }
+
+        async function submitNewUser() {
+            const username = document.getElementById('newUsername').value;
+            const email = document.getElementById('newEmail').value;
+            const password = document.getElementById('newPassword').value;
+            const errorBox = document.getElementById('modalError');
+            const btn = document.getElementById('submitUserBtn');
+            
+            if(!username || !email || !password) {
+                errorBox.textContent = '⚠ All fields are required';
+                errorBox.style.display = 'block';
+                return;
+            }
+            
+            btn.disabled = true;
+            btn.textContent = 'Creating...';
+            errorBox.style.display = 'none';
+            
+            try {
+                const res = await fetch('/api/auth/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, email, password })
+                });
+                const data = await res.json();
+                
+                if (data.success) {
+                    closeAddUserModal();
+                    loadUsers();
+                } else {
+                    errorBox.textContent = '⚠ ' + (data.error || 'Registration failed');
+                    errorBox.style.display = 'block';
+                }
+            } catch (e) {
+                errorBox.textContent = '⚠ Server error';
+                errorBox.style.display = 'block';
+            }
+            
+            btn.disabled = false;
+            btn.textContent = 'Create User';
         }
 
         loadUsers();
