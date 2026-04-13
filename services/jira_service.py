@@ -63,7 +63,7 @@ class JiraService:
         Returns:
             Dictionary containing issues and metadata
         """
-        jql = f'project = {project_key} ORDER BY created DESC'
+        jql = f'project = "{project_key}" ORDER BY created DESC'
 
         try:
             issues = []
@@ -73,7 +73,7 @@ class JiraService:
             while start_at < max_results:
                 # Use JIRA API v3 search endpoint with proper pagination
                 response = self.session.post(
-                    f'{self.base_url}/rest/api/3/search/jql',
+                    f'{self.base_url}/rest/api/3/search',
                     json={
                         'jql': jql,
                         'fields': ['key', 'summary', 'issuetype', 'priority', 'status', 'created', 'updated', 'labels', 'components'],
@@ -138,7 +138,7 @@ class JiraService:
         Returns:
             Dictionary containing bug issues
         """
-        jql = f'project = {project_key} AND issuetype = Bug ORDER BY priority DESC, created DESC'
+        jql = f'project = "{project_key}" AND issuetype = "Bug" ORDER BY priority DESC, created DESC'
 
         try:
             issues = []
@@ -148,7 +148,7 @@ class JiraService:
             while start_at < max_results:
                 # Use JIRA API v3 search endpoint with proper pagination
                 response = self.session.post(
-                    f'{self.base_url}/rest/api/3/search/jql',
+                    f'{self.base_url}/rest/api/3/search',
                     json={
                         'jql': jql,
                         'fields': ['key', 'summary', 'issuetype', 'priority', 'status', 'created', 'updated', 'labels', 'components'],
