@@ -1,105 +1,88 @@
 """
 Authentication Service for SmartDefect Predictor
 Handles user authentication, authorization, and role-based access control
+Using MongoDB as the backend database
 """
-import sqlite3
 import hashlib
 import secrets
 import os
 from functools import wraps
 from flask import session, redirect, url_for, request, jsonify
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, Tuple
+from pymongo import MongoClient
+from bson import ObjectId
+from cryptography.fernet import Fernet
+import base64
 
 
-DB_PATH = os.environ.get('DB_PATH', 'database.db')
+# ─── MongoDB Connection ───────────────────────────────────────────────────────
+
+MONGODB_URI = os.environ.get('MONGODB_URI', 'mongodb://localhost:27017/')
+MONGODB_DB_NAME = os.environ.get('MONGODB_DB_NAME', 'smartdefect_db')
+_client = None
 
 
-def get_db_connection() -> sqlite3.Connection:
-    """Get database connection with row factory"""
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+def get_db():
+    """Return the MongoDB database instance (singleton)."""
+    global _client
+    if _client is None:
+        _client = MongoClient(MONGODB_URI)
+    return _client[MONGODB_DB_NAME]
 
 
-def init_auth_db():
-    """Initialize authentication tables"""
-    conn = get_db_connection()
-    c = conn.cursor()
+# Keep this for backward compat with app.py imports that call get_db_connection
+def get_db_connection():
+    return get_db()
 
-    # Users table with role-based access
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            email TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL,
-            role TEXT NOT NULL DEFAULT 'user',
-            created_at TEXT NOT NULL,
-            last_login TEXT,
-            is_active INTEGER DEFAULT 1
-        )
-    ''')
 
-    # Sessions table for tracking
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS user_sessions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            session_token TEXT UNIQUE NOT NULL,
-            created_at TEXT NOT NULL,
-            expires_at TEXT NOT NULL,
-            ip_address TEXT,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        )
-    ''')
+# ─── Encryption helpers ───────────────────────────────────────────────────────
 
-    # Audit log for security tracking
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS audit_log (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
-            username TEXT,
-            action TEXT NOT NULL,
-            resource TEXT,
-            ip_address TEXT,
-            timestamp TEXT NOT NULL,
-            details TEXT
-        )
-    ''')
+def _get_fernet() -> Fernet:
+    raw_key = os.environ.get('ENCRYPTION_KEY', '')
+    if not raw_key:
+        # generate and cache a key if missing (not persistent – set in .env!)
+        raw_key = Fernet.generate_key().decode()
+    # Ensure it's valid Fernet key (32 url-safe base64 bytes)
+    try:
+        key_bytes = base64.urlsafe_b64decode(raw_key + '==')
+        if len(key_bytes) == 32:
+            return Fernet(base64.urlsafe_b64encode(key_bytes))
+    except Exception:
+        pass
+    return Fernet(Fernet.generate_key())
 
-    # Create default admin user if not exists
-    c.execute('SELECT COUNT(*) FROM users WHERE role = "admin"')
-    if c.fetchone()[0] == 0:
-        # Default admin credentials - MUST be changed in production
-        admin_password = hash_password('admin123')
-        c.execute('''
-            INSERT INTO users (username, email, password_hash, role, created_at)
-            VALUES (?, ?, ?, ?, ?)
-        ''', ('admin', 'admin@smartdefect.local', admin_password, 'admin', datetime.now().isoformat()))
 
-    # Create default regular user if not exists
-    c.execute('SELECT COUNT(*) FROM users WHERE role = "user"')
-    if c.fetchone()[0] == 0:
-        user_password = hash_password('user123')
-        c.execute('''
-            INSERT INTO users (username, email, password_hash, role, created_at)
-            VALUES (?, ?, ?, ?, ?)
-        ''', ('user', 'user@smartdefect.local', user_password, 'user', datetime.now().isoformat()))
+def encrypt_value(plain: str) -> str:
+    """Encrypt a string value."""
+    if not plain:
+        return ''
+    f = _get_fernet()
+    return f.encrypt(plain.encode()).decode()
 
-    conn.commit()
-    conn.close()
 
+def decrypt_value(token: str) -> str:
+    """Decrypt an encrypted string value."""
+    if not token:
+        return ''
+    try:
+        f = _get_fernet()
+        return f.decrypt(token.encode()).decode()
+    except Exception:
+        return token  # fallback if not encrypted
+
+
+# ─── Password helpers ─────────────────────────────────────────────────────────
 
 def hash_password(password: str) -> str:
-    """Hash password with salt using SHA-256"""
+    """Hash password with salt using SHA-256."""
     salt = secrets.token_hex(16)
     password_hash = hashlib.sha256((salt + password).encode()).hexdigest()
     return f"{salt}:{password_hash}"
 
 
 def verify_password(password: str, password_hash: str) -> bool:
-    """Verify password against stored hash"""
+    """Verify password against stored hash."""
     try:
         salt, stored_hash = password_hash.split(':')
         check_hash = hashlib.sha256((salt + password).encode()).hexdigest()
@@ -108,188 +91,269 @@ def verify_password(password: str, password_hash: str) -> bool:
         return False
 
 
+# ─── Database Init ────────────────────────────────────────────────────────────
+
+def init_auth_db():
+    """Initialize authentication collections and default users."""
+    db = get_db()
+
+    # Create indexes
+    db.users.create_index('username', unique=True)
+    db.users.create_index('email', unique=True)
+    db.user_sessions.create_index('session_token', unique=True)
+    db.user_sessions.create_index('expires_at')
+
+    # Create default admin if no admin exists
+    if db.users.count_documents({'role': 'admin'}) == 0:
+        db.users.insert_one({
+            'username': 'admin',
+            'email': 'admin@smartdefect.local',
+            'password_hash': hash_password('admin123'),
+            'role': 'admin',
+            'created_at': datetime.now().isoformat(),
+            'last_login': None,
+            'is_active': True,
+            'jira_config': {}
+        })
+
+    # Create default regular user if none exists
+    if db.users.count_documents({'role': 'user'}) == 0:
+        db.users.insert_one({
+            'username': 'user',
+            'email': 'user@smartdefect.local',
+            'password_hash': hash_password('user123'),
+            'role': 'user',
+            'created_at': datetime.now().isoformat(),
+            'last_login': None,
+            'is_active': True,
+            'jira_config': {}
+        })
+
+
+# ─── Sessions ─────────────────────────────────────────────────────────────────
+
 def generate_session_token() -> str:
-    """Generate secure session token"""
     return secrets.token_urlsafe(32)
 
 
-def create_user_session(user_id: int, ip_address: str = None) -> str:
-    """Create new user session"""
-    conn = get_db_connection()
-    c = conn.cursor()
-
+def create_user_session(user_id: str, ip_address: str = None) -> str:
+    """Create a new session document in MongoDB."""
+    db = get_db()
     session_token = generate_session_token()
-    expires_at = datetime.now().isoformat()
-
-    # Session expires in 24 hours
-    from datetime import timedelta
     expires_at = (datetime.now() + timedelta(hours=24)).isoformat()
 
-    c.execute('''
-        INSERT INTO user_sessions (user_id, session_token, created_at, expires_at, ip_address)
-        VALUES (?, ?, ?, ?, ?)
-    ''', (user_id, session_token, datetime.now().isoformat(), expires_at, ip_address))
+    db.user_sessions.insert_one({
+        'user_id': str(user_id),
+        'session_token': session_token,
+        'created_at': datetime.now().isoformat(),
+        'expires_at': expires_at,
+        'ip_address': ip_address
+    })
 
-    # Update last login
-    c.execute('''
-        UPDATE users SET last_login = ? WHERE id = ?
-    ''', (datetime.now().isoformat(), user_id))
-
-    conn.commit()
-    conn.close()
+    db.users.update_one(
+        {'_id': ObjectId(str(user_id))},
+        {'$set': {'last_login': datetime.now().isoformat()}}
+    )
 
     return session_token
 
 
 def validate_session(session_token: str) -> Optional[Dict[str, Any]]:
-    """Validate session token and return user info"""
-    conn = get_db_connection()
-    c = conn.cursor()
+    """Validate session token and return user info."""
+    db = get_db()
+    ses = db.user_sessions.find_one({
+        'session_token': session_token,
+        'expires_at': {'$gt': datetime.now().isoformat()}
+    })
+    if not ses:
+        return None
 
-    c.execute('''
-        SELECT u.id, u.username, u.email, u.role, u.is_active,
-               s.expires_at, s.ip_address
-        FROM user_sessions s
-        JOIN users u ON s.user_id = u.id
-        WHERE s.session_token = ? AND s.expires_at > ?
-    ''', (session_token, datetime.now().isoformat()))
+    user = db.users.find_one({'_id': ObjectId(ses['user_id'])})
+    if not user:
+        return None
 
-    row = c.fetchone()
-    conn.close()
-
-    if row:
-        return {
-            'id': row['id'],
-            'username': row['username'],
-            'email': row['email'],
-            'role': row['role'],
-            'is_active': row['is_active'],
-            'ip_address': row['ip_address']
-        }
-    return None
+    return {
+        'id': str(user['_id']),
+        'username': user['username'],
+        'email': user['email'],
+        'role': user['role'],
+        'is_active': user.get('is_active', True)
+    }
 
 
 def invalidate_session(session_token: str):
-    """Invalidate session token"""
-    conn = get_db_connection()
-    c = conn.cursor()
-    c.execute('DELETE FROM user_sessions WHERE session_token = ?', (session_token,))
-    conn.commit()
-    conn.close()
+    db = get_db()
+    db.user_sessions.delete_one({'session_token': session_token})
 
 
 def cleanup_expired_sessions():
-    """Remove expired sessions from database"""
-    conn = get_db_connection()
-    c = conn.cursor()
-    c.execute('DELETE FROM user_sessions WHERE expires_at <= ?', (datetime.now().isoformat(),))
-    conn.commit()
-    conn.close()
+    db = get_db()
+    db.user_sessions.delete_many({'expires_at': {'$lte': datetime.now().isoformat()}})
 
 
-def log_audit_action(user_id: Optional[int], username: str, action: str,
+# ─── Audit Log ────────────────────────────────────────────────────────────────
+
+def log_audit_action(user_id, username: str, action: str,
                      resource: str = None, ip_address: str = None, details: str = None):
-    """Log security audit action"""
-    conn = get_db_connection()
-    c = conn.cursor()
-    c.execute('''
-        INSERT INTO audit_log (user_id, username, action, resource, ip_address, timestamp, details)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    ''', (user_id, username, action, resource, ip_address, datetime.now().isoformat(), details))
-    conn.commit()
-    conn.close()
+    db = get_db()
+    db.audit_log.insert_one({
+        'user_id': str(user_id) if user_id else None,
+        'username': username,
+        'action': action,
+        'resource': resource,
+        'ip_address': ip_address,
+        'timestamp': datetime.now().isoformat(),
+        'details': details
+    })
 
+
+# ─── Registration & Authentication ───────────────────────────────────────────
 
 def register_user(username: str, email: str, password: str, role: str = 'user') -> Tuple[bool, str]:
-    """
-    Register new user
-
-    Returns:
-        Tuple of (success, message)
-    """
-    # Validate inputs
     if not username or len(username) < 3:
         return False, "Username must be at least 3 characters"
-
     if not email or '@' not in email:
         return False, "Invalid email address"
-
     if not password or len(password) < 6:
         return False, "Password must be at least 6 characters"
-
     if role not in ['user', 'admin']:
-        role = 'user'  # Default to user role
+        role = 'user'
 
-    password_hash = hash_password(password)
+    db = get_db()
+    if db.users.find_one({'username': username}):
+        return False, "Username already exists"
+    if db.users.find_one({'email': email}):
+        return False, "Email already registered"
+
+    db.users.insert_one({
+        'username': username,
+        'email': email,
+        'password_hash': hash_password(password),
+        'role': role,
+        'created_at': datetime.now().isoformat(),
+        'last_login': None,
+        'is_active': True,
+        'jira_config': {}
+    })
 
     try:
-        conn = get_db_connection()
-        c = conn.cursor()
-        c.execute('''
-            INSERT INTO users (username, email, password_hash, role, created_at)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (username, email, password_hash, role, datetime.now().isoformat()))
-        conn.commit()
-        conn.close()
-
         log_audit_action(None, username, 'USER_REGISTERED', ip_address=request.remote_addr)
-        return True, "User registered successfully"
+    except Exception:
+        pass
 
-    except sqlite3.IntegrityError as e:
-        if 'username' in str(e):
-            return False, "Username already exists"
-        elif 'email' in str(e):
-            return False, "Email already registered"
-        return False, "Registration failed"
+    return True, "User registered successfully"
 
 
 def authenticate_user(username: str, password: str) -> Tuple[Optional[Dict[str, Any]], str]:
-    """
-    Authenticate user with username and password
+    db = get_db()
+    user = db.users.find_one({'$or': [{'username': username}, {'email': username}]})
 
-    Returns:
-        Tuple of (user_info or None, message)
-    """
-    conn = get_db_connection()
-    c = conn.cursor()
-
-    c.execute('''
-        SELECT id, username, email, password_hash, role, is_active
-        FROM users
-        WHERE username = ? OR email = ?
-    ''', (username, username))
-
-    row = c.fetchone()
-    conn.close()
-
-    if not row:
+    if not user:
         return None, "Invalid username or password"
-
-    if not row['is_active']:
+    if not user.get('is_active', True):
         return None, "Account is deactivated"
-
-    if not verify_password(password, row['password_hash']):
+    if not verify_password(password, user['password_hash']):
         return None, "Invalid username or password"
 
     user_info = {
-        'id': row['id'],
-        'username': row['username'],
-        'email': row['email'],
-        'role': row['role']
+        'id': str(user['_id']),
+        'username': user['username'],
+        'email': user['email'],
+        'role': user['role']
     }
 
-    log_audit_action(
-        row['id'], row['username'], 'USER_LOGIN',
-        ip_address=request.remote_addr,
-        details=f"Login successful - Role: {row['role']}"
-    )
+    try:
+        log_audit_action(
+            str(user['_id']), user['username'], 'USER_LOGIN',
+            ip_address=request.remote_addr,
+            details=f"Login successful - Role: {user['role']}"
+        )
+    except Exception:
+        pass
 
     return user_info, "Login successful"
 
 
-# Flask decorators for authentication
+# ─── Jira Config per user ────────────────────────────────────────────────────
+
+def save_jira_config(user_id: str, jira_url: str, jira_email: str, jira_token: str):
+    """Save (and encrypt) per-user Jira credentials."""
+    db = get_db()
+    db.users.update_one(
+        {'_id': ObjectId(user_id)},
+        {'$set': {
+            'jira_config': {
+                'jira_url': jira_url,
+                'jira_email': jira_email,
+                'jira_token_enc': encrypt_value(jira_token)
+            }
+        }}
+    )
+
+
+def load_jira_config(user_id: str) -> Dict[str, str]:
+    """Load and decrypt per-user Jira credentials."""
+    db = get_db()
+    user = db.users.find_one({'_id': ObjectId(user_id)}, {'jira_config': 1})
+    if not user or not user.get('jira_config'):
+        return {}
+    cfg = user['jira_config']
+    return {
+        'jira_url': cfg.get('jira_url', ''),
+        'jira_email': cfg.get('jira_email', ''),
+        'jira_token': decrypt_value(cfg.get('jira_token_enc', ''))
+    }
+
+
+# ─── Google OAuth ─────────────────────────────────────────────────────────────
+
+def create_user_from_google(google_user_info: dict) -> Tuple[Dict[str, Any], bool]:
+    db = get_db()
+    google_email = google_user_info.get('email')
+
+    existing = db.users.find_one({'email': google_email})
+    if existing:
+        return {
+            'id': str(existing['_id']),
+            'username': existing['username'],
+            'email': existing['email'],
+            'role': existing['role']
+        }, False
+
+    username = google_user_info.get('given_name', google_email.split('@')[0])
+    base_username = username
+    counter = 1
+    while db.users.find_one({'username': username}):
+        username = f"{base_username}{counter}"
+        counter += 1
+
+    result = db.users.insert_one({
+        'username': username,
+        'email': google_email,
+        'password_hash': 'google_oauth',
+        'role': 'user',
+        'created_at': datetime.now().isoformat(),
+        'last_login': None,
+        'is_active': True,
+        'jira_config': {}
+    })
+
+    try:
+        log_audit_action(None, username, 'USER_REGISTERED_GOOGLE', ip_address=request.remote_addr)
+    except Exception:
+        pass
+
+    return {
+        'id': str(result.inserted_id),
+        'username': username,
+        'email': google_email,
+        'role': 'user'
+    }, True
+
+
+# ─── Flask Decorators ─────────────────────────────────────────────────────────
+
 def login_required(f):
-    """Decorator to require login for route"""
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if 'user_id' not in session:
@@ -301,87 +365,26 @@ def login_required(f):
 
 
 def admin_required(f):
-    """Decorator to require admin role for route"""
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if 'user_id' not in session:
             if request.is_json or request.path.startswith('/api/'):
                 return jsonify({'error': 'Authentication required'}), 401
             return redirect(url_for('login'))
-
         if session.get('user_role') != 'admin':
             if request.is_json or request.path.startswith('/api/'):
                 return jsonify({'error': 'Admin access required'}), 403
             return redirect(url_for('unauthorized'))
-
         return f(*args, **kwargs)
     return decorated_function
 
 
 def get_current_user() -> Optional[Dict[str, Any]]:
-    """Get current logged-in user from session"""
     if 'user_id' not in session:
         return None
-
     return {
         'id': session.get('user_id'),
         'username': session.get('username'),
         'email': session.get('email'),
         'role': session.get('user_role')
     }
-
-
-def create_user_from_google(google_user_info: dict) -> Tuple[Dict[str, Any], bool]:
-    """
-    Create or get user from Google OAuth info
-
-    Returns:
-        Tuple of (user_info, is_new_user)
-    """
-    conn = get_db_connection()
-    c = conn.cursor()
-
-    google_email = google_user_info.get('email')
-
-    # Check if user exists
-    c.execute('SELECT id, username, email, role, is_active FROM users WHERE email = ?', (google_email,))
-    row = c.fetchone()
-
-    if row:
-        # User exists, return existing user
-        conn.close()
-        return {
-            'id': row['id'],
-            'username': row['username'],
-            'email': row['email'],
-            'role': row['role']
-        }, False
-
-    # Create new user from Google info
-    username = google_user_info.get('given_name', google_email.split('@')[0])
-    # Ensure username is unique
-    base_username = username
-    counter = 1
-    while True:
-        c.execute('SELECT COUNT(*) FROM users WHERE username = ?', (username,))
-        if c.fetchone()[0] == 0:
-            break
-        username = f"{base_username}{counter}"
-        counter += 1
-
-    c.execute('''
-        INSERT INTO users (username, email, password_hash, role, created_at)
-        VALUES (?, ?, ?, ?, ?)
-    ''', (username, google_email, 'google_oauth', 'user', datetime.now().isoformat()))
-
-    conn.commit()
-    conn.close()
-
-    log_audit_action(None, username, 'USER_REGISTERED_GOOGLE', ip_address=request.remote_addr)
-
-    return {
-        'id': c.lastrowid,
-        'username': username,
-        'email': google_email,
-        'role': 'user'
-    }, True

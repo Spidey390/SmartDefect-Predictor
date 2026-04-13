@@ -3,18 +3,21 @@ let allFeatures = [];
 let pieChart = null;
 let barChart = null;
 let jiraData = null;
+
 const fileInput = document.getElementById('fileInput');
 const dropzone = document.getElementById('dropzone');
 const fileHint = document.getElementById('fileHint');
 const analyzeBtn = document.getElementById('analyzeBtn');
 const errorBox = document.getElementById('errorBox');
 const loadingBox = document.getElementById('loadingBox');
+
 fileInput.addEventListener('change', () => {
     if (fileInput.files.length > 0) {
         fileHint.textContent = fileInput.files[0].name;
         analyzeBtn.disabled = false;
     }
 });
+
 dropzone.addEventListener('dragover', (e) => {
     e.preventDefault();
     dropzone.classList.add('drag-over');
@@ -31,9 +34,10 @@ dropzone.addEventListener('drop', (e) => {
     }
 });
 dropzone.addEventListener('click', (e) => {
-if (e.target.closest('button')) return;
-fileInput.click();
+    if (e.target.closest('button')) return;
+    fileInput.click();
 });
+
 function showError(msg) {
     errorBox.textContent = '⚠ ' + msg;
     errorBox.classList.remove('hidden');
@@ -41,6 +45,7 @@ function showError(msg) {
 function hideError() {
     errorBox.classList.add('hidden');
 }
+
 async function uploadFile() {
     if (!fileInput.files.length) return;
     hideError();
@@ -56,8 +61,7 @@ async function uploadFile() {
         allModules = data.modules;
         allFeatures = data.features;
         renderDashboard(data.stats, data.modules, data.features);
-        document.getElementById('dashboard').classList.remove('hidden');
-        document.getElementById('dashboard').scrollIntoView({ behavior: 'smooth' });
+        showSection('dashboard');
         loadHistory();
     } catch (e) {
         loadingBox.classList.add('hidden');
@@ -65,6 +69,7 @@ async function uploadFile() {
         analyzeBtn.disabled = false;
     }
 }
+
 function renderDashboard(stats, modules, features) {
     document.getElementById('statTotal').textContent = stats.total;
     document.getElementById('statHigh').textContent = stats.high;
@@ -75,6 +80,7 @@ function renderDashboard(stats, modules, features) {
     renderBarChart(stats);
     renderTable(modules, features);
 }
+
 function renderPieChart(stats) {
     if (pieChart) pieChart.destroy();
     const ctx = document.getElementById('pieChart').getContext('2d');
@@ -100,6 +106,7 @@ function renderPieChart(stats) {
         }
     });
 }
+
 function renderBarChart(stats) {
     if (barChart) barChart.destroy();
     const ctx = document.getElementById('barChart').getContext('2d');
@@ -127,6 +134,7 @@ function renderBarChart(stats) {
         }
     });
 }
+
 function renderTable(modules, features) {
     const head = document.getElementById('tableHead');
     const body = document.getElementById('tableBody');
@@ -140,8 +148,10 @@ function renderTable(modules, features) {
         }).join('') + '</tr>';
     }).join('');
     document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-    document.querySelector('.filter-btn:first-child').classList.add('active');
+    const firstBtn = document.querySelector('.filter-btn:first-child');
+    if (firstBtn) firstBtn.classList.add('active');
 }
+
 function filterTable(risk) {
     const filtered = risk === 'ALL' ? allModules : allModules.filter(m => m.risk_level === risk);
     renderTable(filtered, allFeatures);
@@ -149,19 +159,22 @@ function filterTable(risk) {
     const activeBtn = [...document.querySelectorAll('.filter-btn')].find(b => b.textContent.trim() === (risk === 'ALL' ? 'All' : risk.charAt(0) + risk.slice(1).toLowerCase()));
     if (activeBtn) activeBtn.classList.add('active');
 }
+
 async function loadHistory() {
     try {
-        const res = await fetch('/history');
+        const res = await fetch('/api/history');
         const rows = await res.json();
         const body = document.getElementById('historyBody');
         if (!rows.length) {
-            body.innerHTML = '<tr><td colspan="8" class="empty-row">No history yet.</td></tr>';
+            body.innerHTML = '<tr><td colspan="9" class="empty-row">No history yet.</td></tr>';
             return;
         }
-        body.innerHTML = rows.map(r => {
+        body.innerHTML = rows.map((r, idx) => {
             const ts = new Date(r.timestamp).toLocaleString();
-            return `<tr>
-<td>${r.id}</td>
+            const sourceIcon = r.source === 'jira' ? '🔗 JIRA' : '📄 CSV';
+            return `<tr onclick="viewHistoryDetail('${r.id}')" style="cursor:pointer;" title="Click to view analysis details">
+<td>${idx + 1}</td>
+<td><span style="font-size:0.8rem;opacity:0.8;">${sourceIcon}</span></td>
 <td>${r.filename}</td>
 <td>${ts}</td>
 <td>${r.total_modules}</td>
@@ -175,8 +188,79 @@ async function loadHistory() {
         console.error('History load error:', e);
     }
 }
+
+async function viewHistoryDetail(analysisId) {
+    try {
+        const res = await fetch(`/api/history/${analysisId}`);
+        const data = await res.json();
+        if (data.error) { alert('Could not load analysis: ' + data.error); return; }
+
+        allModules = data.modules;
+        allFeatures = data.features;
+
+        renderDashboard(data.stats, data.modules, data.features);
+
+        // Switch to the dashboard section and scroll to it
+        showSection('dashboard');
+        document.getElementById('dashboard').scrollIntoView({ behavior: 'smooth' });
+
+        // Show a banner indicating this is a historical run
+        const header = document.querySelector('#dashboard .section-header h2');
+        if (header) {
+            header.innerHTML = `Analysis <span class="accent-glow">Results</span> <span style="font-size:0.7em;color:#6e7091;font-weight:400;">— history: ${data.filename}</span>`;
+        }
+    } catch (e) {
+        alert('Error loading history detail: ' + e.message);
+    }
+}
+
 async function downloadFile(type) {
     window.location.href = '/download/' + type;
+}
+
+// ==================== JIRA CONFIG ====================
+
+async function loadSavedJiraConfig() {
+    try {
+        const res = await fetch('/api/user/jira-config');
+        const data = await res.json();
+        if (data.success && data.config) {
+            const cfg = data.config;
+            if (cfg.jira_url) document.getElementById('jiraUrl').value = cfg.jira_url;
+            if (cfg.jira_email) document.getElementById('jiraEmail').value = cfg.jira_email;
+            if (cfg.jira_token) document.getElementById('jiraToken').value = cfg.jira_token;
+        }
+    } catch (e) {
+        console.error('Could not load JIRA config:', e);
+    }
+}
+
+async function saveJiraCredentials() {
+    const creds = getJiraCredentials();
+    if (!creds.jira_url || !creds.email || !creds.api_token) {
+        showJiraStatus('Please fill in JIRA URL, Email, and API Token before saving.', 'error');
+        return;
+    }
+    const btn = document.getElementById('saveJiraBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="btn-icon">⏳</span> Saving...';
+    try {
+        const res = await fetch('/api/user/jira-config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ jira_url: creds.jira_url, email: creds.email, api_token: creds.api_token })
+        });
+        const data = await res.json();
+        if (data.success) {
+            showJiraStatus('✓ JIRA credentials saved successfully!', 'success');
+        } else {
+            showJiraStatus(`✗ ${data.error}`, 'error');
+        }
+    } catch (e) {
+        showJiraStatus(`Error saving credentials: ${e.message}`, 'error');
+    }
+    btn.disabled = false;
+    btn.innerHTML = '<span class="btn-icon">💾</span> Save Credentials';
 }
 
 // ==================== JIRA ANALYSIS FUNCTIONS ====================
@@ -322,16 +406,12 @@ async function analyzeJiraProject() {
 
         showJiraStatus(`✓ Analysis complete! Found ${data.total_issues_fetched} issues, ${data.stats.total_modules} modules analyzed`, 'success');
 
-        // Store JIRA data
         jiraData = data;
         allModules = data.modules;
         allFeatures = data.features;
 
-        // Render dashboard
         renderDashboard(data.stats, data.modules, data.features);
-
-        // Show dashboard
-        document.getElementById('dashboard').classList.remove('hidden');
+        showSection('dashboard');
         document.getElementById('dashboard').scrollIntoView({ behavior: 'smooth' });
         loadHistory();
 
@@ -345,19 +425,27 @@ async function analyzeJiraProject() {
 
 // ==================== NAVIGATION ====================
 
+function showSection(sectionId) {
+    document.querySelectorAll('.section').forEach(s => s.classList.add('hidden'));
+    const target = document.getElementById(sectionId);
+    if (target) target.classList.remove('hidden');
+
+    document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+    const link = document.querySelector(`.nav-link[href="#${sectionId}"]`);
+    if (link) link.classList.add('active');
+}
+
 document.querySelectorAll('.nav-link').forEach(link => {
     link.addEventListener('click', (e) => {
         const target = link.getAttribute('href');
         if (target && target.startsWith('#')) {
             e.preventDefault();
-            document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
-            link.classList.add('active');
-
-            document.querySelectorAll('.section').forEach(s => s.classList.add('hidden'));
-            const targetEl = document.querySelector(target);
-            if (targetEl) targetEl.classList.remove('hidden');
+            showSection(target.slice(1));
         }
     });
 });
 
+// ==================== INIT ====================
+
 loadHistory();
+loadSavedJiraConfig();

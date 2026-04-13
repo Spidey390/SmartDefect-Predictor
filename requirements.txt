@@ -10,3 +10,6 @@ flask-limiter
 flask-session
 authlib
 httpx
+pymongo>=4.0
+dnspython
+cryptography

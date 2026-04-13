@@ -123,6 +123,9 @@
                         <button class="btn btn-outline" onclick="testJiraConnection()">
                             <span class="btn-icon">🔌</span> Test Connection
                         </button>
+                        <button class="btn btn-outline" onclick="saveJiraCredentials()" id="saveJiraBtn" style="border-color:#00e5a0;color:#00e5a0;">
+                            <span class="btn-icon">💾</span> Save Credentials
+                        </button>
                         <button class="btn btn-primary" onclick="analyzeJiraProject()" id="jiraAnalyzeBtn">
                             <span class="btn-icon">🤖</span> Analyze Project
                         </button>
@@ -232,24 +235,26 @@
                 <h2>Analysis <span class="accent-glow">History</span></h2>
                 <button class="btn btn-sm btn-outline" onclick="loadHistory()">↻ Refresh</button>
             </div>
+            <p style="color:#6e7091;font-size:0.85rem;margin-bottom:12px;">💡 Click any row to view its full analysis and charts.</p>
             <div class="table-card">
                 <div class="table-wrap">
                     <table>
                         <thead>
                             <tr>
                                 <th>#</th>
-                                <th>Filename</th>
+                                <th>Source</th>
+                                <th>Filename / Project</th>
                                 <th>Timestamp</th>
                                 <th>Total</th>
-                                <th>High</th>
-                                <th>Medium</th>
-                                <th>Low</th>
+                                <th style="color:var(--high)">High</th>
+                                <th style="color:var(--medium)">Medium</th>
+                                <th style="color:var(--low)">Low</th>
                                 <th>Success Rate</th>
                             </tr>
                         </thead>
                         <tbody id="historyBody">
                             <tr>
-                                <td colspan="8" class="empty-row">No history yet. Run an analysis first.</td>
+                                <td colspan="9" class="empty-row">No history yet. Run an analysis first.</td>
                             </tr>
                         </tbody>
                     </table>
