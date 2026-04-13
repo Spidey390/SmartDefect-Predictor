@@ -156,34 +156,41 @@ def register():
 @limiter.limit("10 per minute")
 def api_login():
     """Authenticate user and create session"""
-    data = request.get_json()
-    username = data.get('username', '')
-    password = data.get('password', '')
+    try:
+        data = request.get_json(silent=True)
+        if not data:
+            return jsonify({'error': 'Invalid JSON data'}), 400
 
-    if not username or not password:
-        return jsonify({'error': 'Username and password required'}), 400
+        username = data.get('username', '')
+        password = data.get('password', '')
 
-    user_info, message = authenticate_user(username, password)
+        if not username or not password:
+            return jsonify({'error': 'Username and password required'}), 400
 
-    if not user_info:
-        return jsonify({'error': message}), 401
+        user_info, message = authenticate_user(username, password)
 
-    # Create session
-    session_token = create_user_session(user_info['id'], request.remote_addr)
+        if not user_info:
+            return jsonify({'error': message}), 401
 
-    # Set Flask session
-    session['user_id'] = user_info['id']
-    session['username'] = user_info['username']
-    session['email'] = user_info['email']
-    session['user_role'] = user_info['role']
-    session.permanent = True
+        # Create session
+        session_token = create_user_session(user_info['id'], request.remote_addr)
 
-    return jsonify({
-        'success': True,
-        'message': message,
-        'role': user_info['role'],
-        'username': user_info['username']
-    })
+        # Set Flask session
+        session['user_id'] = user_info['id']
+        session['username'] = user_info['username']
+        session['email'] = user_info['email']
+        session['user_role'] = user_info['role']
+        session.permanent = True
+
+        return jsonify({
+            'success': True,
+            'message': message,
+            'role': user_info['role'],
+            'username': user_info['username']
+        })
+    except Exception as e:
+        logger.error(f"Login error: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
 
 
 @app.route('/api/auth/register', methods=['POST'])
@@ -227,11 +234,17 @@ def get_current_user_api():
     return jsonify({'success': False, 'user': None})
 
 
+@app.route('/favicon.ico')
+def favicon():
+    """Serve favicon"""
+    return send_file(os.path.join(app.static_folder, 'favicon.ico'), mimetype='image/x-icon')
+
+
 @app.route('/api/auth/google')
 def google_login():
     """Initiate Google OAuth login"""
     if not google_client_id:
-        return redirect(url_for('login', error='Google OAuth not configured. Please check your .env file.'))
+        return redirect(url_for('login', error='Google OAuth not configured.'))
 
     redirect_uri = url_for('google_callback', _external=True)
     return oauth.google.authorize_redirect(redirect_uri)
