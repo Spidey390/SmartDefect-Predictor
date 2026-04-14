@@ -71,9 +71,9 @@ class JiraService:
             batch_size = min(100, max_results)
 
             while start_at < max_results:
-                # Use JIRA API v3 search endpoint with proper pagination
+                # Use migrated JIRA API v3 search/jql endpoint
                 response = self.session.post(
-                    f'{self.base_url}/rest/api/3/search',
+                    f'{self.base_url}/rest/api/3/search/jql',
                     json={
                         'jql': jql,
                         'fields': ['key', 'summary', 'issuetype', 'priority', 'status', 'created', 'updated', 'labels', 'components'],
@@ -81,18 +81,6 @@ class JiraService:
                         'maxResults': batch_size
                     }
                 )
-
-                if response.status_code == 404:
-                    # Fallback to standard search endpoint if JQL endpoint not available
-                    response = self.session.get(
-                        f'{self.base_url}/rest/api/3/search',
-                        params={
-                            'jql': jql,
-                            'startAt': start_at,
-                            'maxResults': batch_size,
-                            'fields': 'key,summary,issuetype,priority,status,created,updated,labels,components'
-                        }
-                    )
 
                 if response.status_code != 200:
                     return {
@@ -146,9 +134,9 @@ class JiraService:
             batch_size = min(100, max_results)
 
             while start_at < max_results:
-                # Use JIRA API v3 search endpoint with proper pagination
+                # Use migrated JIRA API v3 search/jql endpoint
                 response = self.session.post(
-                    f'{self.base_url}/rest/api/3/search',
+                    f'{self.base_url}/rest/api/3/search/jql',
                     json={
                         'jql': jql,
                         'fields': ['key', 'summary', 'issuetype', 'priority', 'status', 'created', 'updated', 'labels', 'components'],
@@ -156,18 +144,6 @@ class JiraService:
                         'maxResults': batch_size
                     }
                 )
-
-                if response.status_code == 404:
-                    # Fallback to standard search endpoint if JQL endpoint not available
-                    response = self.session.get(
-                        f'{self.base_url}/rest/api/3/search',
-                        params={
-                            'jql': jql,
-                            'startAt': start_at,
-                            'maxResults': batch_size,
-                            'fields': 'key,summary,issuetype,priority,status,created,updated,labels,components'
-                        }
-                    )
 
                 if response.status_code != 200:
                     return {
