@@ -259,12 +259,16 @@ def extract_issue_data(issues: List[Dict]) -> List[Dict]:
         created = fields.get('created', '')
         updated = fields.get('updated', '')
 
+        # Calculate priority weight
+        priority_weight = calculate_priority_weight(priority_name)
+
         extracted.append({
             'key': issue.get('key', ''),
             'summary': fields.get('summary', ''),
             'issue_type': issue_type_name,
             'priority': priority_name,
             'priority_id': int(priority_id) if priority_id.isdigit() else 0,
+            'priority_weight': priority_weight,
             'status': status_name,
             'status_category': status_category,
             'created': created,
