@@ -54,7 +54,7 @@ class JiraService:
 
     def get_project_issues(self, project_key: str, max_results: int = 1000) -> Dict[str, Any]:
         """
-        Fetch all issues from a JIRA project using JIRA API v3
+        Fetch all issues from a JIRA project using JIRA API v3 /search/jql endpoint
 
         Args:
             project_key: JIRA project key (e.g., 'PROJ')
@@ -67,19 +67,21 @@ class JiraService:
 
         try:
             issues = []
-            start_at = 0
             batch_size = min(100, max_results)
+            next_page_token = None
 
-            while start_at < max_results:
-                # Use migrated JIRA API v3 search/jql endpoint
+            while len(issues) < max_results:
+                payload = {
+                    'jql': jql,
+                    'fields': ['key', 'summary', 'issuetype', 'priority', 'status', 'created', 'updated', 'labels', 'components'],
+                    'maxResults': batch_size
+                }
+                if next_page_token:
+                    payload['nextPageToken'] = next_page_token
+
                 response = self.session.post(
                     f'{self.base_url}/rest/api/3/search/jql',
-                    json={
-                        'jql': jql,
-                        'fields': ['key', 'summary', 'issuetype', 'priority', 'status', 'created', 'updated', 'labels', 'components'],
-                        'startAt': start_at,
-                        'maxResults': batch_size
-                    }
+                    json=payload
                 )
 
                 if response.status_code != 200:
@@ -96,11 +98,10 @@ class JiraService:
                     break
 
                 issues.extend(batch_issues)
+                next_page_token = data.get('nextPageToken')
 
-                total = data.get('total', 0)
-                if len(batch_issues) < batch_size or start_at + batch_size >= total or start_at + batch_size >= max_results:
+                if not next_page_token or len(issues) >= max_results:
                     break
-                start_at += batch_size
 
             return {
                 'success': True,
@@ -117,7 +118,7 @@ class JiraService:
 
     def get_bugs_only(self, project_key: str, max_results: int = 500) -> Dict[str, Any]:
         """
-        Fetch only bug issues from a JIRA project using JIRA API v3
+        Fetch only bug issues from a JIRA project using JIRA API v3 /search/jql endpoint
 
         Args:
             project_key: JIRA project key
@@ -130,19 +131,21 @@ class JiraService:
 
         try:
             issues = []
-            start_at = 0
             batch_size = min(100, max_results)
+            next_page_token = None
 
-            while start_at < max_results:
-                # Use migrated JIRA API v3 search/jql endpoint
+            while len(issues) < max_results:
+                payload = {
+                    'jql': jql,
+                    'fields': ['key', 'summary', 'issuetype', 'priority', 'status', 'created', 'updated', 'labels', 'components'],
+                    'maxResults': batch_size
+                }
+                if next_page_token:
+                    payload['nextPageToken'] = next_page_token
+
                 response = self.session.post(
                     f'{self.base_url}/rest/api/3/search/jql',
-                    json={
-                        'jql': jql,
-                        'fields': ['key', 'summary', 'issuetype', 'priority', 'status', 'created', 'updated', 'labels', 'components'],
-                        'startAt': start_at,
-                        'maxResults': batch_size
-                    }
+                    json=payload
                 )
 
                 if response.status_code != 200:
@@ -159,11 +162,10 @@ class JiraService:
                     break
 
                 issues.extend(batch_issues)
+                next_page_token = data.get('nextPageToken')
 
-                total = data.get('total', 0)
-                if len(batch_issues) < batch_size or start_at + batch_size >= total or start_at + batch_size >= max_results:
+                if not next_page_token or len(issues) >= max_results:
                     break
-                start_at += batch_size
 
             return {
                 'success': True,

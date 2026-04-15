@@ -21,16 +21,30 @@ fileInput.addEventListener('change', () => {
 dropzone.addEventListener('dragover', (e) => {
     e.preventDefault();
     dropzone.classList.add('drag-over');
+    dropzone.style.borderColor = 'var(--accent)';
+    dropzone.style.background = 'var(--surface-light)';
 });
-dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag-over'));
+
+dropzone.addEventListener('dragleave', (e) => {
+    e.preventDefault();
+    dropzone.classList.remove('drag-over');
+    dropzone.style.borderColor = 'var(--border)';
+    dropzone.style.background = 'var(--surface)';
+});
+
 dropzone.addEventListener('drop', (e) => {
     e.preventDefault();
     dropzone.classList.remove('drag-over');
+    dropzone.style.borderColor = 'var(--border)';
+    dropzone.style.background = 'var(--surface)';
     const file = e.dataTransfer.files[0];
     if (file && file.name.endsWith('.csv')) {
         fileInput.files = e.dataTransfer.files;
         fileHint.textContent = file.name;
         analyzeBtn.disabled = false;
+        notify('File loaded: ' + file.name, 'success');
+    } else {
+        notify('Please upload a CSV file', 'error');
     }
 });
 dropzone.addEventListener('click', (e) => {
@@ -42,31 +56,72 @@ function showError(msg) {
     errorBox.textContent = '⚠ ' + msg;
     errorBox.classList.remove('hidden');
 }
+
 function hideError() {
     errorBox.classList.add('hidden');
+}
+
+// Professional toast notification system
+function notify(message, type = 'success') {
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.style.cssText = `position:fixed; bottom:20px; right:20px; padding:15px 25px; border-radius:8px; background:var(--surface-light); border-left:4px solid ${type === 'success' ? 'var(--low)' : 'var(--high)'}; z-index:9999; animation: slideIn 0.3s ease-out; color:var(--text-main); font-family:'Syne',sans-serif; font-weight:600;`;
+    toast.innerHTML = `<strong>${type.toUpperCase()}</strong>: ${message}`;
+    document.body.appendChild(toast);
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transition = 'opacity 0.3s';
+        setTimeout(() => toast.remove(), 300);
+    }, 4000);
 }
 
 async function uploadFile() {
     if (!fileInput.files.length) return;
     hideError();
-    loadingBox.classList.remove('hidden');
+
+    // Show loading overlay
+    const loadingOverlay = document.getElementById('loadingOverlay');
+    if (loadingOverlay) {
+        loadingOverlay.classList.add('active');
+    } else {
+        loadingBox.classList.remove('hidden');
+    }
+
     analyzeBtn.disabled = true;
     const formData = new FormData();
     formData.append('file', fileInput.files[0]);
     try {
         const res = await fetch('/upload', { method: 'POST', body: formData });
         const data = await res.json();
-        loadingBox.classList.add('hidden');
-        if (data.error) { showError(data.error); analyzeBtn.disabled = false; return; }
+
+        if (loadingOverlay) {
+            loadingOverlay.classList.remove('active');
+        } else {
+            loadingBox.classList.add('hidden');
+        }
+
+        if (data.error) {
+            showError(data.error);
+            analyzeBtn.disabled = false;
+            notify('Upload failed: ' + data.error, 'error');
+            return;
+        }
+
         allModules = data.modules;
         allFeatures = data.features;
         renderDashboard(data.stats, data.modules, data.features);
         showSection('dashboard');
         loadHistory();
+        notify('Analysis complete! ' + data.stats.total + ' modules processed', 'success');
     } catch (e) {
-        loadingBox.classList.add('hidden');
+        if (loadingOverlay) {
+            loadingOverlay.classList.remove('active');
+        } else {
+            loadingBox.classList.add('hidden');
+        }
         showError('Server error: ' + e.message);
         analyzeBtn.disabled = false;
+        notify('Upload error: ' + e.message, 'error');
     }
 }
 
@@ -385,6 +440,13 @@ async function analyzeJiraProject() {
     }
 
     hideJiraStatus();
+
+    // Show loading overlay
+    const loadingOverlay = document.getElementById('loadingOverlay');
+    if (loadingOverlay) {
+        loadingOverlay.classList.add('active');
+    }
+
     jiraAnalyzeBtn.disabled = true;
     jiraAnalyzeBtn.innerHTML = '<span class="spinner" style="width:16px;height:16px;border-width:2px;"></span> Analyzing...';
 
@@ -397,14 +459,20 @@ async function analyzeJiraProject() {
 
         const data = await res.json();
 
+        if (loadingOverlay) {
+            loadingOverlay.classList.remove('active');
+        }
+
         if (data.error) {
             showJiraStatus(`✗ ${data.error}`, 'error');
             jiraAnalyzeBtn.disabled = false;
             jiraAnalyzeBtn.innerHTML = '<span class="btn-icon">🤖</span> Analyze Project';
+            notify('JIRA analysis failed: ' + data.error, 'error');
             return;
         }
 
         showJiraStatus(`✓ Analysis complete! Found ${data.total_issues_fetched} issues, ${data.stats.total_modules} modules analyzed`, 'success');
+        notify(`JIRA analysis complete: ${data.stats.total_modules} modules`, 'success');
 
         jiraData = data;
         allModules = data.modules;
@@ -416,7 +484,11 @@ async function analyzeJiraProject() {
         loadHistory();
 
     } catch (e) {
+        if (loadingOverlay) {
+            loadingOverlay.classList.remove('active');
+        }
         showJiraStatus(`Error: ${e.message}`, 'error');
+        notify('JIRA analysis error: ' + e.message, 'error');
     }
 
     jiraAnalyzeBtn.disabled = false;
